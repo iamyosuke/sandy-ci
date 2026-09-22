@@ -1,0 +1,9 @@
+# The public runner repository is an explicit allowlist. Do not mirror source.
+*
+!.gitignore
+!README.md
+!.github/
+!.github/workflows/
+!.github/workflows/sandy-public-macos.yml
+!runner/
+!runner/run-public-ci.sh

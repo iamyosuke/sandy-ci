@@ -1,0 +1,209 @@
+name: private macOS validation
+
+on:
+  repository_dispatch:
+    types: [sandy-private-request]
+
+permissions:
+  contents: read
+
+run-name: sandy-public-ci-${{ github.event.client_payload.request_id }}
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.4.1.app/Contents/Developer
+  SANDY_REQUEST_ID: ${{ github.event.client_payload.request_id }}
+  SANDY_REQUEST_RUN_ID: ${{ github.event.client_payload.request_run_id }}
+
+jobs:
+  prepare:
+    name: prepare
+    if: github.event.action == 'sandy-private-request' && github.run_attempt == 1
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Fetch private source and request (secret)
+        env:
+          SANDY_SOURCE_TOKEN: ${{ secrets.SANDY_SOURCE_TOKEN }}
+        run: ./runner/run-public-ci.sh fetch
+      - name: Run prepare
+        run: ./runner/run-public-ci.sh prepare
+      - name: Encrypt products (secret)
+        env:
+          SANDY_PAYLOAD_KEY: ${{ secrets.SANDY_PAYLOAD_KEY }}
+        run: ./runner/run-public-ci.sh encrypt-products
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sandy-ci-payload
+          path: |
+            ${{ runner.temp }}/sandy-private/products.enc
+            ${{ runner.temp }}/sandy-private/products.enc.hmac
+          retention-days: 2
+          if-no-files-found: error
+
+  lane-a:
+    name: lane-a
+    needs: prepare
+    if: always() && needs.prepare.result == 'success'
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Fetch private source (secret)
+        env:
+          SANDY_SOURCE_TOKEN: ${{ secrets.SANDY_SOURCE_TOKEN }}
+        run: ./runner/run-public-ci.sh fetch
+      - name: Run lane
+        env:
+          SANDY_OPAQUE_LANE: a
+        run: ./runner/run-public-ci.sh run-lane
+      - name: Encrypt result (secret)
+        env:
+          SANDY_PAYLOAD_KEY: ${{ secrets.SANDY_PAYLOAD_KEY }}
+          SANDY_RESULT_ID: a
+        run: ./runner/run-public-ci.sh encrypt-result
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sandy-ci-result-a
+          path: |
+            ${{ runner.temp }}/sandy-private/result-a.enc
+            ${{ runner.temp }}/sandy-private/result-a.enc.hmac
+          retention-days: 2
+          if-no-files-found: error
+
+  lane-b:
+    name: lane-b ${{ matrix.id }}
+    needs: prepare
+    if: always() && needs.prepare.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {id: 1, opaque: b-1}
+          - {id: 2, opaque: b-2}
+          - {id: 3, opaque: b-3}
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Fetch private source (secret)
+        env:
+          SANDY_SOURCE_TOKEN: ${{ secrets.SANDY_SOURCE_TOKEN }}
+        run: ./runner/run-public-ci.sh fetch
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: sandy-ci-payload
+          path: ${{ runner.temp }}/sandy-private
+      - name: Decrypt products (secret)
+        env:
+          SANDY_PAYLOAD_KEY: ${{ secrets.SANDY_PAYLOAD_KEY }}
+        run: ./runner/run-public-ci.sh decrypt-products
+      - name: Run lane
+        env:
+          SANDY_OPAQUE_LANE: ${{ matrix.opaque }}
+        run: ./runner/run-public-ci.sh run-lane
+      - name: Encrypt result (secret)
+        env:
+          SANDY_PAYLOAD_KEY: ${{ secrets.SANDY_PAYLOAD_KEY }}
+          SANDY_RESULT_ID: ${{ matrix.opaque }}
+        run: ./runner/run-public-ci.sh encrypt-result
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sandy-ci-result-${{ matrix.opaque }}
+          path: |
+            ${{ runner.temp }}/sandy-private/result-${{ matrix.opaque }}.enc
+            ${{ runner.temp }}/sandy-private/result-${{ matrix.opaque }}.enc.hmac
+          retention-days: 2
+          if-no-files-found: error
+
+  lane-c:
+    name: lane-c ${{ matrix.id }}
+    needs: prepare
+    if: always() && needs.prepare.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {id: 1, opaque: c-1}
+          - {id: 2, opaque: c-2}
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Fetch private source (secret)
+        env:
+          SANDY_SOURCE_TOKEN: ${{ secrets.SANDY_SOURCE_TOKEN }}
+        run: ./runner/run-public-ci.sh fetch
+      - name: Run lane
+        env:
+          SANDY_OPAQUE_LANE: ${{ matrix.opaque }}
+        run: ./runner/run-public-ci.sh run-lane
+      - name: Encrypt result (secret)
+        env:
+          SANDY_PAYLOAD_KEY: ${{ secrets.SANDY_PAYLOAD_KEY }}
+          SANDY_RESULT_ID: ${{ matrix.opaque }}
+        run: ./runner/run-public-ci.sh encrypt-result
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sandy-ci-result-${{ matrix.opaque }}
+          path: |
+            ${{ runner.temp }}/sandy-private/result-${{ matrix.opaque }}.enc
+            ${{ runner.temp }}/sandy-private/result-${{ matrix.opaque }}.enc.hmac
+          retention-days: 2
+          if-no-files-found: error
+
+  finalize:
+    needs: [prepare, lane-a, lane-b, lane-c]
+    if: always() && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Fetch private source and request (secret)
+        env:
+          SANDY_SOURCE_TOKEN: ${{ secrets.SANDY_SOURCE_TOKEN }}
+        run: ./runner/run-public-ci.sh fetch
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: sandy-ci-payload
+          path: ${{ runner.temp }}/sandy-private/final-inputs/payload
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: sandy-ci-result-*
+          path: ${{ runner.temp }}/sandy-private/final-inputs/results
+          merge-multiple: false
+      - name: Decrypt and collect private evidence (secret)
+        env:
+          SANDY_PAYLOAD_KEY: ${{ secrets.SANDY_PAYLOAD_KEY }}
+          SANDY_FINALIZE: "1"
+        run: ./runner/run-public-ci.sh decrypt-final-inputs
+      - name: Run finalize
+        env:
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          LANE_A_RESULT: ${{ needs.lane-a.result }}
+          LANE_B_RESULT: ${{ needs.lane-b.result }}
+          LANE_C_RESULT: ${{ needs.lane-c.result }}
+          PUBLIC_RUN_ID: ${{ github.run_id }}
+        run: ./runner/run-public-ci.sh finalize
+      - name: Encrypt final bundle (secret)
+        env:
+          SANDY_PAYLOAD_KEY: ${{ secrets.SANDY_PAYLOAD_KEY }}
+        run: ./runner/run-public-ci.sh encrypt-final
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sandy-public-ci-${{ github.event.client_payload.request_id }}
+          path: |
+            ${{ runner.temp }}/sandy-private/result.bundle.enc
+            ${{ runner.temp }}/sandy-private/result.bundle.hmac
+          retention-days: 2
+          if-no-files-found: error
