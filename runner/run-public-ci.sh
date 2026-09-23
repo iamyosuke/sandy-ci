@@ -139,10 +139,9 @@ PY
     stage=6
     git -C "$WORKSPACE/source" checkout --quiet --detach "$base_sha"
     stage=7
-    trusted_paths="$(git -C "$WORKSPACE/source" ls-tree -r --name-only "$base_sha" | awk '/private_lane\.py$/ {print}')"
-    [[ "$(printf '%s\n' "$trusted_paths" | sed '/^$/d' | wc -l | tr -d ' ')" == 1 ]] || fail
     mkdir -p "$WORKSPACE/trusted"
-    trusted_path="$(printf '%s\n' "$trusted_paths" | sed -n '1p')"
+    trusted_path='scripts/testing/public_ci/private_lane.py'
+    git -C "$WORKSPACE/source" cat-file -e "$base_sha:$trusted_path" || fail
     git -C "$WORKSPACE/source" show "$base_sha:$trusted_path" > "$WORKSPACE/trusted/private_lane.py"
     stage=8
     GIT_AUTHOR_DATE="$merge_date" GIT_COMMITTER_DATE="$merge_date" git -C "$WORKSPACE/source" -c user.name='Sandy CI' -c user.email='ci@namiai.com' merge --no-ff --no-edit "$head_sha" >/dev/null 2>&1 || fail
