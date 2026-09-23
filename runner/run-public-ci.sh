@@ -10,12 +10,15 @@ unset BASH_ENV ENV CDPATH GLOBIGNORE || true
 mkdir -p "$WORKSPACE" >/dev/null 2>&1
 chmod 700 "$WORKSPACE" >/dev/null 2>&1
 status=1
+stage=0
 finish() {
   local code=$?
   if [[ "$status" == 0 && "$code" == 0 ]]; then
     echo 'Sandy private validation: succeeded'
   else
-    echo 'Sandy private validation: failed'
+    # Fixed codes identify the failing operation without exposing private
+    # paths, repository metadata, command output, or credentials.
+    echo "Sandy private validation: failed (stage $stage)"
     exit 1
   fi
 }
@@ -96,11 +99,14 @@ PY
   if [[ "$MODE" == fetch ]]; then
     [[ -n "${SANDY_SOURCE_TOKEN:-}" ]] || fail
     command -v gh >/dev/null 2>&1 || fail
+    stage=1
     private_repository="$(GH_TOKEN="$SANDY_SOURCE_TOKEN" gh api repositories/1217636338 --jq .full_name 2>/dev/null)"
     [[ "$private_repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || fail
+    stage=2
     rm -rf "$WORKSPACE/request-artifact"
     GH_TOKEN="$SANDY_SOURCE_TOKEN" gh run download "$request_run_id" --repo "$private_repository" --name "sandy-private-request-$request_id" --dir "$WORKSPACE/request-artifact" >/dev/null 2>&1
     cp "$WORKSPACE/request-artifact/request.json" "$WORKSPACE/request.json"
+    stage=3
     python3 - "$WORKSPACE/request.json" "$request_id" "${GITHUB_SHA:-}" <<'PY'
 import json, re, sys, time
 d = json.load(open(sys.argv[1], encoding="utf-8"))
@@ -117,15 +123,21 @@ PY
     head_sha="$(python3 -c 'import json; print(json.load(open("'"$WORKSPACE"'/request.json"))["head_sha"])')"
     base_sha="$(python3 -c 'import json; print(json.load(open("'"$WORKSPACE"'/request.json"))["base_sha"])')"
     merge_date="$(python3 -c 'import datetime,json; d=json.load(open("'"$WORKSPACE"'/request.json")); print(datetime.datetime.fromtimestamp(d["created_at"],datetime.timezone.utc).isoformat())')"
+    stage=4
     git clone --no-checkout --filter=blob:none "https://x-access-token:${SANDY_SOURCE_TOKEN}@github.com/$private_repository.git" "$WORKSPACE/source" >/dev/null 2>&1
+    stage=5
     git -C "$WORKSPACE/source" fetch --quiet --no-tags origin "$head_sha" "$base_sha"
+    stage=6
     git -C "$WORKSPACE/source" checkout --quiet --detach "$base_sha"
+    stage=7
     trusted_paths="$(git -C "$WORKSPACE/source" ls-tree -r --name-only "$base_sha" | awk '/private_lane\.py$/ {print}')"
     [[ "$(printf '%s\n' "$trusted_paths" | sed '/^$/d' | wc -l | tr -d ' ')" == 1 ]] || fail
     mkdir -p "$WORKSPACE/trusted"
     trusted_path="$(printf '%s\n' "$trusted_paths" | sed -n '1p')"
     git -C "$WORKSPACE/source" show "$base_sha:$trusted_path" > "$WORKSPACE/trusted/private_lane.py"
+    stage=8
     GIT_AUTHOR_DATE="$merge_date" GIT_COMMITTER_DATE="$merge_date" git -C "$WORKSPACE/source" -c user.name='Sandy CI' -c user.email='ci@namiai.com' merge --no-ff --no-edit "$head_sha" >/dev/null 2>&1 || fail
+    stage=9
     git -C "$WORKSPACE/source" remote set-url origin "https://github.com/$private_repository.git"
     [[ "$(git -C "$WORKSPACE/source" remote get-url origin)" == "https://github.com/$private_repository.git" ]] || fail
     python3 - "$WORKSPACE/source" "$WORKSPACE/candidate.json" "$head_sha" "$base_sha" <<'PY'
