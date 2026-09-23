@@ -19,22 +19,28 @@ jobs:
     name: prepare
     if: github.event.action == 'sandy-private-request' && github.run_attempt == 1
     runs-on: macos-26
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
       - name: Fetch private source and request
+        id: fetch
         env:
           SANDY_SOURCE_TOKEN: ${{ secrets.SANDY_SOURCE_TOKEN }}
         run: ./runner/run-public-ci.sh fetch
       - name: Run prepare
+        timeout-minutes: 30
         run: ./runner/run-public-ci.sh prepare
       - name: Encrypt prepare evidence
+        id: encrypt
+        if: ${{ always() && steps.fetch.outcome == 'success' }}
         env:
           SANDY_CI_RECIPIENT_CERT: ${{ vars.SANDY_CI_RECIPIENT_CERT }}
         run: ./runner/run-public-ci.sh encrypt-prepare
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ always() && steps.encrypt.outcome == 'success' }}
         with:
           name: sandy-ci-prepare-${{ github.event.client_payload.request_id }}
           path: ${{ runner.temp }}/sandy-private/prepare.bundle.cms
@@ -46,25 +52,31 @@ jobs:
     needs: prepare
     if: always() && needs.prepare.result == 'success'
     runs-on: macos-26
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
       - name: Fetch private source
+        id: fetch
         env:
           SANDY_SOURCE_TOKEN: ${{ secrets.SANDY_SOURCE_TOKEN }}
         run: ./runner/run-public-ci.sh fetch
       - name: Run lane
+        timeout-minutes: 105
         env:
           SANDY_OPAQUE_LANE: a
         run: ./runner/run-public-ci.sh run-lane
       - name: Encrypt lane result
+        id: encrypt
+        if: ${{ always() && steps.fetch.outcome == 'success' }}
         env:
           SANDY_CI_RECIPIENT_CERT: ${{ vars.SANDY_CI_RECIPIENT_CERT }}
           SANDY_RESULT_ID: a
         run: ./runner/run-public-ci.sh encrypt-result
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ always() && steps.encrypt.outcome == 'success' }}
         with:
           name: sandy-ci-result-a
           path: ${{ runner.temp }}/sandy-private/result-a.bundle.cms
@@ -83,25 +95,31 @@ jobs:
           - {id: 2, opaque: b-2}
           - {id: 3, opaque: b-3}
     runs-on: macos-26
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
       - name: Fetch private source
+        id: fetch
         env:
           SANDY_SOURCE_TOKEN: ${{ secrets.SANDY_SOURCE_TOKEN }}
         run: ./runner/run-public-ci.sh fetch
       - name: Run lane
+        timeout-minutes: 105
         env:
           SANDY_OPAQUE_LANE: ${{ matrix.opaque }}
         run: ./runner/run-public-ci.sh run-lane
       - name: Encrypt lane result
+        id: encrypt
+        if: ${{ always() && steps.fetch.outcome == 'success' }}
         env:
           SANDY_CI_RECIPIENT_CERT: ${{ vars.SANDY_CI_RECIPIENT_CERT }}
           SANDY_RESULT_ID: ${{ matrix.opaque }}
         run: ./runner/run-public-ci.sh encrypt-result
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ always() && steps.encrypt.outcome == 'success' }}
         with:
           name: sandy-ci-result-${{ matrix.opaque }}
           path: ${{ runner.temp }}/sandy-private/result-${{ matrix.opaque }}.bundle.cms
@@ -119,25 +137,31 @@ jobs:
           - {id: 1, opaque: c-1}
           - {id: 2, opaque: c-2}
     runs-on: macos-26
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
       - name: Fetch private source
+        id: fetch
         env:
           SANDY_SOURCE_TOKEN: ${{ secrets.SANDY_SOURCE_TOKEN }}
         run: ./runner/run-public-ci.sh fetch
       - name: Run lane
+        timeout-minutes: 105
         env:
           SANDY_OPAQUE_LANE: ${{ matrix.opaque }}
         run: ./runner/run-public-ci.sh run-lane
       - name: Encrypt lane result
+        id: encrypt
+        if: ${{ always() && steps.fetch.outcome == 'success' }}
         env:
           SANDY_CI_RECIPIENT_CERT: ${{ vars.SANDY_CI_RECIPIENT_CERT }}
           SANDY_RESULT_ID: ${{ matrix.opaque }}
         run: ./runner/run-public-ci.sh encrypt-result
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ always() && steps.encrypt.outcome == 'success' }}
         with:
           name: sandy-ci-result-${{ matrix.opaque }}
           path: ${{ runner.temp }}/sandy-private/result-${{ matrix.opaque }}.bundle.cms
