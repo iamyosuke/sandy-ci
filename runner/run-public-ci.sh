@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-exec 3>&1
 
 readonly WORKSPACE="${RUNNER_TEMP:?}/sandy-private"
 readonly MODE="${1:-}"
+if [[ "$MODE" == fetch ]]; then exec 3>&1; fi
 readonly REQUEST_RE='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
 readonly SAFE_PATH='/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin'
 export PATH="$SAFE_PATH"
@@ -15,11 +15,19 @@ stage=0
 finish() {
   local code=$?
   if [[ "$status" == 0 && "$code" == 0 ]]; then
-    echo 'Sandy private validation: succeeded' >&3
+    if [[ "$MODE" == fetch ]]; then
+      echo 'Sandy private validation: succeeded' >&3
+    else
+      echo 'Sandy private validation: succeeded'
+    fi
   else
     # Fixed codes identify the failing operation without exposing private
     # paths, repository metadata, command output, or credentials.
-    echo "Sandy private validation: failed (stage $stage)" >&3
+    if [[ "$MODE" == fetch ]]; then
+      echo "Sandy private validation: failed (stage $stage)" >&3
+    else
+      echo 'Sandy private validation: failed'
+    fi
     exit 1
   fi
 }
