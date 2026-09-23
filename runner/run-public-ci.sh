@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+exec 3>&1
 
 readonly WORKSPACE="${RUNNER_TEMP:?}/sandy-private"
 readonly MODE="${1:-}"
@@ -14,11 +15,11 @@ stage=0
 finish() {
   local code=$?
   if [[ "$status" == 0 && "$code" == 0 ]]; then
-    echo 'Sandy private validation: succeeded'
+    echo 'Sandy private validation: succeeded' >&3
   else
     # Fixed codes identify the failing operation without exposing private
     # paths, repository metadata, command output, or credentials.
-    echo "Sandy private validation: failed (stage $stage)"
+    echo "Sandy private validation: failed (stage $stage)" >&3
     exit 1
   fi
 }
