@@ -1,8 +1,8 @@
-name: private macOS validation callback
+name: macOS validation completion
 
 on:
   workflow_run:
-    workflows: [private macOS validation]
+    workflows: [macOS validation]
     types: [completed]
 
 permissions:
