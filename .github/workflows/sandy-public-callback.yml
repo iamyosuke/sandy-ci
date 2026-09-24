@@ -26,7 +26,10 @@ jobs:
             const RUN_ID = /^[1-9][0-9]{0,19}$/;
             const fail = (message) => { throw new Error(`Callback validation failed: ${message}`); };
             const run = context.payload.workflow_run;
-            if (!run || run.path !== '.github/workflows/sandy-public-macos.yml') fail('workflow path');
+            if (!run || ![
+              '.github/workflows/sandy-public-macos.yml',
+              '.github/workflows/sandy-public-macos.yml@main',
+            ].includes(run.path)) fail('workflow path');
             if (run.workflow_id !== 364487606) fail('workflow identity');
             if (run.event !== 'repository_dispatch') fail('trigger event');
             if (run.run_attempt !== 1) fail('run attempt');

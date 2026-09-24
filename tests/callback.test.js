@@ -85,6 +85,11 @@ test('relays only the three validated opaque IDs in the fixed body', async () =>
   assert.equal(JSON.stringify(calls.compare), JSON.stringify([{ owner: 'iamyosuke', repo: 'sandy-ci', basehead: `${runSha}...${mainSha}` }]));
 });
 
+test('accepts the workflow path with GitHub main-ref suffix', async () => {
+  const calls = await invoke({ run: { path: '.github/workflows/sandy-public-macos.yml@main' } });
+  assert.equal(calls.relay.length, 2);
+});
+
 for (const [label, run] of [
   ['wrong workflow path', { path: '.github/workflows/other.yml' }],
   ['wrong workflow ID', { workflow_id: 123 }],
