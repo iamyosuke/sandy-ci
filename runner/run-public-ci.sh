@@ -53,6 +53,20 @@ private_exec() {
     python3 "$entrypoint" "$@"
 }
 
+use_isolated_keychain() {
+  # SwiftPM probes the login Keychain when downloading binary artifacts. On
+  # headless macOS runners that lookup can wait indefinitely for SecurityAgent.
+  # An empty, unlocked keychain keeps public package downloads noninteractive.
+  local keychain="$WORKSPACE/ci.keychain-db" password
+  password="$(openssl rand -hex 32)"
+  security create-keychain -p "$password" "$keychain"
+  security unlock-keychain -p "$password" "$keychain"
+  unset password
+  security set-keychain-settings -lut 14400 "$keychain"
+  security list-keychains -d user -s "$keychain"
+  security default-keychain -d user -s "$keychain"
+}
+
 recipient_certificate() {
   local output="$WORKSPACE/recipient.pem"
   [[ -n "${SANDY_CI_RECIPIENT_CERT:-}" ]] || fail
@@ -161,10 +175,12 @@ PY
   mkdir -p "$WORKSPACE/results" "$WORKSPACE/products"
   case "$MODE" in
     prepare)
+      use_isolated_keychain
       private_exec prepare
       [[ -d "$WORKSPACE/products" ]] || fail
       ;;
     run-lane)
+      use_isolated_keychain
       [[ -n "${SANDY_OPAQUE_LANE:-}" ]] || fail
       # Lane B used to consume products from the prepare runner. Rebuild locally
       # so no products need to cross runner boundaries.
