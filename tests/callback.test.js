@@ -21,9 +21,10 @@ const requestId = 'f394f9cc-12ab-4ad8-9222-9a43bc9f5330';
 const requestRunId = '1234567890123';
 const publicRunId = 9876543210;
 const mainSha = 'a'.repeat(40);
+const runSha = 'b'.repeat(40);
 
 function invoke(overrides = {}) {
-  const calls = { relay: [], branch: 0 };
+  const calls = { relay: [], branch: 0, compare: [] };
   const run = {
     path: '.github/workflows/sandy-public-macos.yml',
     name: 'private macOS validation',
@@ -31,7 +32,7 @@ function invoke(overrides = {}) {
     run_attempt: 1,
     display_title: `sandy-public-ci-${requestId}-${requestRunId}`,
     id: publicRunId,
-    head_sha: mainSha,
+    head_sha: runSha,
     ...overrides.run,
   };
   const context = {
@@ -39,16 +40,22 @@ function invoke(overrides = {}) {
     repo: { owner: 'iamyosuke', repo: 'sandy-ci' },
   };
   const github = {
-    rest: { repos: { getBranch: async (input) => {
-      calls.branch++;
-      assert.equal(JSON.stringify(input), JSON.stringify({ owner: 'iamyosuke', repo: 'sandy-ci', branch: 'main' }));
-      return { data: { commit: { sha: overrides.mainSha || mainSha } } };
-    } } },
+    rest: { repos: {
+      getBranch: async (input) => {
+        calls.branch++;
+        assert.equal(JSON.stringify(input), JSON.stringify({ owner: 'iamyosuke', repo: 'sandy-ci', branch: 'main' }));
+        return { data: { commit: { sha: overrides.mainSha || mainSha } } };
+      },
+      compareCommitsWithBasehead: async (input) => {
+        calls.compare.push(input);
+        return { data: { status: overrides.comparisonStatus || 'ahead' } };
+      },
+    } },
   };
   const env = {
     SANDY_CALLBACK_TOKEN: 'fine-grained-token',
-    SANDY_CALLBACK_REPOSITORY_ID: '5567774149',
-    SANDY_CALLBACK_ISSUE_NUMBER: '42',
+    SANDY_CALLBACK_REPOSITORY_ID: '1217636338',
+    SANDY_CALLBACK_ISSUE_NUMBER: '81',
     ...overrides.env,
   };
   const fetch = async (...args) => {
@@ -64,12 +71,13 @@ test('relays only the three validated opaque IDs in the fixed body', async () =>
   const calls = await invoke();
   assert.equal(calls.relay.length, 1);
   const [url, options] = calls.relay[0];
-  assert.equal(url, 'https://api.github.com/repositories/5567774149/issues/42/comments');
+  assert.equal(url, 'https://api.github.com/repositories/1217636338/issues/81/comments');
   assert.equal(options.method, 'POST');
   assert.equal(options.headers.Authorization, 'Bearer fine-grained-token');
   assert.deepEqual(JSON.parse(options.body), {
     body: JSON.stringify({ request_id: requestId, request_run_id: requestRunId, public_run_id: String(publicRunId) }),
   });
+  assert.equal(JSON.stringify(calls.compare), JSON.stringify([{ owner: 'iamyosuke', repo: 'sandy-ci', basehead: `${runSha}...${mainSha}` }]));
 });
 
 for (const [label, run] of [
@@ -80,7 +88,7 @@ for (const [label, run] of [
   ['unbound request run ID', { display_title: `sandy-public-ci-${requestId}-0` }],
   ['malformed request ID', { display_title: `sandy-public-ci-not-a-uuid-${requestRunId}` }],
   ['invalid public run ID', { id: '123;evil' }],
-  ['non-main workflow SHA', { head_sha: 'b'.repeat(40) }],
+  ['invalid workflow SHA', { head_sha: 'invalid' }],
 ]) {
   test(`fails closed for ${label}`, async () => {
     const result = invoke({ run });
@@ -89,13 +97,22 @@ for (const [label, run] of [
   });
 }
 
-test('fails closed when the run SHA is no longer current main', async () => {
-  await assert.rejects(invoke({ mainSha: 'c'.repeat(40) }));
+test('fails closed when the run SHA is not in current main history', async () => {
+  await assert.rejects(invoke({ comparisonStatus: 'behind' }));
 });
 
 test('fails closed when relay configuration is missing', async () => {
   const calls = await invoke({ env: { SANDY_CALLBACK_TOKEN: '' } }).catch((error) => error);
   assert.match(calls.message, /relay configuration/);
+});
+
+test('fails closed when repository ID or issue number targets another relay', async () => {
+  for (const env of [
+    { SANDY_CALLBACK_REPOSITORY_ID: '5567774149' },
+    { SANDY_CALLBACK_ISSUE_NUMBER: '42' },
+  ]) {
+    await assert.rejects(invoke({ env }));
+  }
 });
 
 test('callback script is valid JavaScript', () => {
