@@ -18,7 +18,7 @@ jobs:
   prepare:
     name: prepare
     if: github.event.action == 'sandy-private-request' && github.run_attempt == 1
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -51,7 +51,7 @@ jobs:
     name: lane-a
     needs: prepare
     if: always() && needs.prepare.result == 'success'
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -94,7 +94,7 @@ jobs:
           - {id: 1, opaque: b-1}
           - {id: 2, opaque: b-2}
           - {id: 3, opaque: b-3}
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -136,7 +136,7 @@ jobs:
         include:
           - {id: 1, opaque: c-1}
           - {id: 2, opaque: c-2}
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
