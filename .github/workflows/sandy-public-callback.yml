@@ -27,7 +27,7 @@ jobs:
             const fail = (message) => { throw new Error(`Callback validation failed: ${message}`); };
             const run = context.payload.workflow_run;
             if (!run || run.path !== '.github/workflows/sandy-public-macos.yml') fail('workflow path');
-            if (run.name !== 'private macOS validation') fail('workflow name');
+            if (run.workflow_id !== 364487606) fail('workflow identity');
             if (run.event !== 'repository_dispatch') fail('trigger event');
             if (run.run_attempt !== 1) fail('run attempt');
 

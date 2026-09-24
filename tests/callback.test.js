@@ -27,7 +27,8 @@ function invoke(overrides = {}) {
   const calls = { relay: [], branch: 0, compare: [] };
   const run = {
     path: '.github/workflows/sandy-public-macos.yml',
-    name: 'private macOS validation',
+    workflow_id: 364487606,
+    name: `sandy-public-ci-${requestId}-${requestRunId}`,
     event: 'repository_dispatch',
     run_attempt: 1,
     display_title: `sandy-public-ci-${requestId}-${requestRunId}`,
@@ -82,7 +83,7 @@ test('relays only the three validated opaque IDs in the fixed body', async () =>
 
 for (const [label, run] of [
   ['wrong workflow path', { path: '.github/workflows/other.yml' }],
-  ['wrong workflow name', { name: 'other workflow' }],
+  ['wrong workflow ID', { workflow_id: 123 }],
   ['wrong trigger event', { event: 'push' }],
   ['rerun attempt', { run_attempt: 2 }],
   ['unbound request run ID', { display_title: `sandy-public-ci-${requestId}-0` }],
