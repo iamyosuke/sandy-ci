@@ -50,13 +50,24 @@ jobs:
             const issueNumber = process.env.SANDY_CALLBACK_ISSUE_NUMBER || '';
             if (!token || repositoryId !== '1217636338' || issueNumber !== '81') fail('relay configuration');
 
+            const headers = {
+              'Accept': 'application/vnd.github+json',
+              'Authorization': `Bearer ${token}`,
+              'X-GitHub-Api-Version': '2022-11-28',
+            };
+            const repositoryResponse = await fetch(`https://api.github.com/repositories/${repositoryId}`, {
+              headers,
+              signal: AbortSignal.timeout(15000),
+            });
+            if (!repositoryResponse.ok) fail('relay repository lookup');
+            const repository = await repositoryResponse.json();
+            if (String(repository.id) !== repositoryId || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository.full_name || '')) fail('relay repository identity');
+
             const body = JSON.stringify({ request_id: requestId, request_run_id: requestRunId, public_run_id: String(run.id) });
-            const response = await fetch(`https://api.github.com/repositories/${repositoryId}/issues/${issueNumber}/comments`, {
+            const response = await fetch(`https://api.github.com/repos/${repository.full_name}/issues/${issueNumber}/comments`, {
               method: 'POST',
               headers: {
-                'Accept': 'application/vnd.github+json',
-                'Authorization': `Bearer ${token}`,
-                'X-GitHub-Api-Version': '2022-11-28',
+                ...headers,
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({ body }),
