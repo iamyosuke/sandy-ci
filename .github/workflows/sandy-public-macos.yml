@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 
-run-name: sandy-public-ci-${{ github.event.client_payload.request_id }}
+run-name: sandy-public-ci-${{ github.event.client_payload.request_id }}-${{ github.event.client_payload.request_run_id }}
 
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.4.1.app/Contents/Developer

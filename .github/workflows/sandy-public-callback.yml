@@ -1,0 +1,59 @@
+name: private macOS validation callback
+
+on:
+  workflow_run:
+    workflows: [private macOS validation]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  relay:
+    if: github.event.workflow_run.event == 'repository_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate and relay completion IDs
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        env:
+          SANDY_CALLBACK_TOKEN: ${{ secrets.SANDY_CALLBACK_TOKEN }}
+          SANDY_CALLBACK_REPOSITORY_ID: ${{ vars.SANDY_CALLBACK_REPOSITORY_ID }}
+          SANDY_CALLBACK_ISSUE_NUMBER: ${{ vars.SANDY_CALLBACK_ISSUE_NUMBER }}
+        with:
+          script: |
+            const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            const RUN_ID = /^[1-9][0-9]{0,19}$/;
+            const fail = (message) => { throw new Error(`Callback validation failed: ${message}`); };
+            const run = context.payload.workflow_run;
+            if (!run || run.path !== '.github/workflows/sandy-public-macos.yml') fail('workflow path');
+            if (run.name !== 'private macOS validation') fail('workflow name');
+            if (run.event !== 'repository_dispatch') fail('trigger event');
+            if (run.run_attempt !== 1) fail('run attempt');
+
+            const match = /^sandy-public-ci-([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})-([1-9][0-9]{0,19})$/i.exec(run.display_title || '');
+            if (!match || !UUID.test(match[1]) || !RUN_ID.test(match[2])) fail('display title binding');
+            const [, requestId, requestRunId] = match;
+
+            if (!/^[1-9][0-9]{0,19}$/.test(String(run.id))) fail('public run ID');
+            const current = await github.rest.repos.getBranch({ owner: context.repo.owner, repo: context.repo.repo, branch: 'main' });
+            if (!/^[0-9a-f]{40}$/i.test(run.head_sha || '') || run.head_sha !== current.data.commit.sha) fail('workflow SHA is not current main');
+
+            const token = process.env.SANDY_CALLBACK_TOKEN || '';
+            const repositoryId = process.env.SANDY_CALLBACK_REPOSITORY_ID || '';
+            const issueNumber = process.env.SANDY_CALLBACK_ISSUE_NUMBER || '';
+            if (!token || !/^[1-9][0-9]{0,19}$/.test(repositoryId) || !/^[1-9][0-9]*$/.test(issueNumber)) fail('relay configuration');
+
+            const body = JSON.stringify({ request_id: requestId, request_run_id: requestRunId, public_run_id: String(run.id) });
+            const response = await fetch(`https://api.github.com/repositories/${repositoryId}/issues/${issueNumber}/comments`, {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/vnd.github+json',
+                'Authorization': `Bearer ${token}`,
+                'X-GitHub-Api-Version': '2022-11-28',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ body }),
+              signal: AbortSignal.timeout(15000),
+            });
+            if (!response.ok) fail('relay API request');
