@@ -62,7 +62,7 @@ function invoke(overrides = {}) {
   const fetch = async (...args) => {
     calls.relay.push(args);
     if (args[0] === 'https://api.github.com/repositories/1217636338') {
-      return { ok: true, json: async () => overrides.repository || { id: 1217636338, full_name: 'iamyosuke/Sandy' } };
+      return { ok: true, json: async () => overrides.repository || { id: 1217636338, full_name: 'hidden-org/hidden-repo' } };
     }
     return { ok: true };
   };
@@ -76,7 +76,7 @@ test('relays only the three validated opaque IDs in the fixed body', async () =>
   assert.equal(calls.relay.length, 2);
   assert.equal(calls.relay[0][0], 'https://api.github.com/repositories/1217636338');
   const [url, options] = calls.relay[1];
-  assert.equal(url, 'https://api.github.com/repos/iamyosuke/Sandy/issues/81/comments');
+  assert.equal(url, 'https://api.github.com/repos/hidden-org/hidden-repo/issues/81/comments');
   assert.equal(options.method, 'POST');
   assert.equal(options.headers.Authorization, 'Bearer fine-grained-token');
   assert.deepEqual(JSON.parse(options.body), {
@@ -121,7 +121,7 @@ test('fails closed when repository ID or issue number targets another relay', as
 });
 
 test('fails closed when repository lookup does not match the fixed target', async () => {
-  await assert.rejects(invoke({ repository: { id: 1217636339, full_name: 'iamyosuke/Sandy' } }));
+  await assert.rejects(invoke({ repository: { id: 1217636339, full_name: 'hidden-org/hidden-repo' } }));
   await assert.rejects(invoke({ repository: { id: 1217636338, full_name: 'invalid/name/extra' } }));
 });
 
