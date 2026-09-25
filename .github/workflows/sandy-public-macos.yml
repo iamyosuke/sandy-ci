@@ -1,4 +1,4 @@
-name: private macOS validation
+name: macOS validation
 
 on:
   repository_dispatch:
@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 
-run-name: sandy-public-ci-${{ github.event.client_payload.request_id }}
+run-name: sandy-public-ci-${{ github.event.client_payload.request_id }}-${{ github.event.client_payload.request_run_id }}
 
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.4.1.app/Contents/Developer
@@ -25,7 +25,7 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
-      - name: Fetch private source and request
+      - name: Fetch source and request
         id: fetch
         env:
           SANDY_SOURCE_TOKEN: ${{ secrets.SANDY_SOURCE_TOKEN }}
@@ -58,7 +58,7 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
-      - name: Fetch private source
+      - name: Fetch source
         id: fetch
         env:
           SANDY_SOURCE_TOKEN: ${{ secrets.SANDY_SOURCE_TOKEN }}
@@ -94,6 +94,8 @@ jobs:
           - {id: 1, opaque: b-1}
           - {id: 2, opaque: b-2}
           - {id: 3, opaque: b-3}
+          - {id: 4, opaque: b-4}
+          - {id: 5, opaque: b-5}
     runs-on: macos-26-intel
     timeout-minutes: 120
     steps:
@@ -101,7 +103,7 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
-      - name: Fetch private source
+      - name: Fetch source
         id: fetch
         env:
           SANDY_SOURCE_TOKEN: ${{ secrets.SANDY_SOURCE_TOKEN }}
@@ -143,7 +145,7 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
-      - name: Fetch private source
+      - name: Fetch source
         id: fetch
         env:
           SANDY_SOURCE_TOKEN: ${{ secrets.SANDY_SOURCE_TOKEN }}

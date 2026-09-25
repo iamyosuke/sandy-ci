@@ -86,7 +86,7 @@ encrypt_cms() {
 
 safe_result_id() {
   local value="${SANDY_RESULT_ID:-}"
-  [[ "$value" =~ ^(a|b-[123]|c-[12])$ ]] || fail
+  [[ "$value" =~ ^(a|b-[1-5]|c-[12])$ ]] || fail
   printf '%s' "$value"
 }
 
@@ -184,7 +184,7 @@ PY
       [[ -n "${SANDY_OPAQUE_LANE:-}" ]] || fail
       # Lane B used to consume products from the prepare runner. Rebuild locally
       # so no products need to cross runner boundaries.
-      if [[ "$SANDY_OPAQUE_LANE" =~ ^b-[123]$ ]]; then
+      if [[ "$SANDY_OPAQUE_LANE" =~ ^b-[1-5]$ ]]; then
         private_exec prepare
       fi
       private_exec run --lane "$SANDY_OPAQUE_LANE"

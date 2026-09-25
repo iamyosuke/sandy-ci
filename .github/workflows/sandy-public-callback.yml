@@ -1,0 +1,79 @@
+name: macOS validation completion
+
+on:
+  workflow_run:
+    workflows: [macOS validation]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  relay:
+    if: github.event.workflow_run.event == 'repository_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate and relay completion IDs
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        env:
+          SANDY_CALLBACK_TOKEN: ${{ secrets.SANDY_CALLBACK_TOKEN }}
+          SANDY_CALLBACK_REPOSITORY_ID: ${{ vars.SANDY_CALLBACK_REPOSITORY_ID }}
+          SANDY_CALLBACK_ISSUE_NUMBER: ${{ vars.SANDY_CALLBACK_ISSUE_NUMBER }}
+        with:
+          script: |
+            const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            const RUN_ID = /^[1-9][0-9]{0,19}$/;
+            const fail = (message) => { throw new Error(`Callback validation failed: ${message}`); };
+            const run = context.payload.workflow_run;
+            if (!run || ![
+              '.github/workflows/sandy-public-macos.yml',
+              '.github/workflows/sandy-public-macos.yml@main',
+            ].includes(run.path)) fail('workflow path');
+            if (run.workflow_id !== 364487606) fail('workflow identity');
+            if (run.event !== 'repository_dispatch') fail('trigger event');
+            if (run.run_attempt !== 1) fail('run attempt');
+
+            const match = /^sandy-public-ci-([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})-([1-9][0-9]{0,19})$/i.exec(run.display_title || '');
+            if (!match || !UUID.test(match[1]) || !RUN_ID.test(match[2])) fail('display title binding');
+            const [, requestId, requestRunId] = match;
+
+            if (!/^[1-9][0-9]{0,19}$/.test(String(run.id))) fail('public run ID');
+            const current = await github.rest.repos.getBranch({ owner: context.repo.owner, repo: context.repo.repo, branch: 'main' });
+            if (!/^[0-9a-f]{40}$/i.test(run.head_sha || '') || !/^[0-9a-f]{40}$/i.test(current.data.commit.sha || '')) fail('invalid workflow SHA');
+            const comparison = await github.rest.repos.compareCommitsWithBasehead({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              basehead: `${run.head_sha}...${current.data.commit.sha}`,
+            });
+            if (!['ahead', 'identical'].includes(comparison.data.status)) fail('workflow SHA is not on current main history');
+
+            const token = process.env.SANDY_CALLBACK_TOKEN || '';
+            const repositoryId = process.env.SANDY_CALLBACK_REPOSITORY_ID || '';
+            const issueNumber = process.env.SANDY_CALLBACK_ISSUE_NUMBER || '';
+            if (!token || repositoryId !== '1217636338' || issueNumber !== '81') fail('relay configuration');
+
+            const headers = {
+              'Accept': 'application/vnd.github+json',
+              'Authorization': `Bearer ${token}`,
+              'X-GitHub-Api-Version': '2022-11-28',
+            };
+            const repositoryResponse = await fetch(`https://api.github.com/repositories/${repositoryId}`, {
+              headers,
+              signal: AbortSignal.timeout(15000),
+            });
+            if (!repositoryResponse.ok) fail('relay repository lookup');
+            const repository = await repositoryResponse.json();
+            if (String(repository.id) !== repositoryId || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository.full_name || '')) fail('relay repository identity');
+
+            const body = JSON.stringify({ request_id: requestId, request_run_id: requestRunId, public_run_id: String(run.id) });
+            const response = await fetch(`https://api.github.com/repos/${repository.full_name}/issues/${issueNumber}/comments`, {
+              method: 'POST',
+              headers: {
+                ...headers,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ body }),
+              signal: AbortSignal.timeout(15000),
+            });
+            if (!response.ok) fail('relay API request');
