@@ -94,6 +94,8 @@ jobs:
           - {id: 1, opaque: b-1}
           - {id: 2, opaque: b-2}
           - {id: 3, opaque: b-3}
+          - {id: 4, opaque: b-4}
+          - {id: 5, opaque: b-5}
     runs-on: macos-26-intel
     timeout-minutes: 120
     steps:
